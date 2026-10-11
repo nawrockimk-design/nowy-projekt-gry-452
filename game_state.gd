@@ -17,6 +17,7 @@ var rooms: Array = ["hall"]
 var best_floor := 0
 var inv = Inventory.new()
 var message := ""                   # komunikat do pokazania w gildii
+var in_run := false                 # true od wejścia do lochu do powrotu portalem lub śmierci
 
 
 func _ready() -> void:
@@ -33,6 +34,7 @@ func reset() -> void:
 	stats = {"str": 0, "vit": 0, "agi": 0}
 	rooms = ["hall"]
 	best_floor = 0
+	in_run = false
 	inv.reset()
 	refresh_inventory()
 	hp = max_hp()
@@ -61,7 +63,8 @@ func xp_to_next() -> int:
 	return Balance.XP_PER_LEVEL * level
 
 
-# Zwraca liczbę zdobytych poziomów.
+# Zwraca liczbę zdobytych poziomów. HP w lochu śledzi main.gd (player_hp),
+# więc tu tylko poziom i punkty; HP wraca do GameState przy powrocie lub śmierci.
 func add_xp(amount: int) -> int:
 	xp += amount
 	var gained := 0
@@ -69,7 +72,6 @@ func add_xp(amount: int) -> int:
 		xp -= xp_to_next()
 		level += 1
 		stat_points += Balance.POINTS_PER_LEVEL
-		hp += Balance.HP_PER_LEVEL
 		gained += 1
 	return gained
 
@@ -106,7 +108,8 @@ func refresh_inventory() -> void:
 		inv.max_weight += Balance.STORAGE_WEIGHT_BONUS
 
 
-func rest() -> void:
+# Nowy dzień z leczeniem: z Lecznicą pełne, bez niej część HP.
+func next_day() -> void:
 	day += 1
 	if has_room("infirmary"):
 		hp = max_hp()
@@ -114,23 +117,44 @@ func rest() -> void:
 		hp = mini(max_hp(), hp + ceili(max_hp() * Balance.REST_HEAL_PCT))
 
 
-# Bezpieczny powrót z lochu: złoto do skarbca, nowy dzień.
+# Płatny nocleg w gildii. Zwraca false, gdy brakuje złota.
+func rest() -> bool:
+	if gold < Balance.REST_COST:
+		return false
+	gold -= Balance.REST_COST
+	next_day()
+	return true
+
+
+# Bezpieczny powrót z lochu: złoto do skarbca, nowy dzień (darmowy).
 func return_from_dungeon(run_gold: int, floor_reached: int, player_hp: int) -> void:
+	in_run = false
 	gold += run_gold
 	best_floor = maxi(best_floor, floor_reached)
 	hp = player_hp
-	rest()
+	next_day()
 	message = "Wracasz z piętra %d z %d zł. Nowy dzień: %d." % [floor_reached, run_gold, day]
 	save_game()
 
 
 # Śmierć: tracisz złoto z wyprawy i plecak, założony sprzęt zostaje.
 func die_in_dungeon(run_gold: int, floor_reached: int) -> void:
+	in_run = false
 	best_floor = maxi(best_floor, floor_reached)
 	inv.pack = []
 	day += 1
 	hp = maxi(1, ceili(max_hp() * Balance.DEATH_HP_PCT))
 	message = "Ledwo żywego wynieśli Cię z piętra %d. Przepadło %d zł i plecak." % [floor_reached, run_gold]
+	save_game()
+
+
+# Gra zamknięta w trakcie wyprawy liczy się jak śmierć, żeby nie dało się uciec przed karą.
+func abandon_run() -> void:
+	in_run = false
+	inv.pack = []
+	day += 1
+	hp = maxi(1, ceili(max_hp() * Balance.DEATH_HP_PCT))
+	message = "Wyprawa urwała się w połowie. Przepadło złoto z wyprawy i plecak. Dzień %d." % day
 	save_game()
 
 
@@ -140,7 +164,7 @@ func save_game() -> void:
 	var data := {
 		"gold": gold, "day": day, "level": level, "xp": xp, "stat_points": stat_points,
 		"stats": stats, "hp": hp, "rooms": rooms, "best_floor": best_floor,
-		"weapon": inv.weapon, "armor": inv.armor, "pack": inv.pack,
+		"weapon": inv.weapon, "armor": inv.armor, "pack": inv.pack, "in_run": in_run,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -175,7 +199,10 @@ func load_game() -> bool:
 		inv.pack.append(clean_item(it))
 	refresh_inventory()
 	hp = clampi(int(data.get("hp", max_hp())), 1, max_hp())
+	in_run = false
 	message = "Wczytano zapis. Dzień %d." % day
+	if bool(data.get("in_run", false)) and Balance.QUIT_IN_RUN_IS_DEATH:
+		abandon_run()
 	return true
 
 

@@ -22,7 +22,7 @@ func options() -> Array:
 	for room in Balance.ROOMS:
 		if not GameState.has_room(room["id"]):
 			list.append({"type": "buy", "room": room, "label": "Kup: %s (%d zł) - %s" % [room["name"], room["cost"], room["info"]]})
-	list.append({"type": "rest", "label": "Odpocznij (nowy dzień)"})
+	list.append({"type": "rest", "label": "Odpocznij za %d zł (nowy dzień, leczenie)" % Balance.REST_COST})
 	list.append({"type": "system", "label": "Otwórz okno Systemu (Tab)"})
 	list.append({"type": "reset", "label": "Nowa gra (kasuje zapis)"})
 	return list
@@ -56,6 +56,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func choose(opt: Dictionary) -> void:
 	match opt["type"]:
 		"dungeon":
+			# Od teraz do powrotu portalem lub śmierci trwa wyprawa. Zamknięcie gry w jej trakcie = śmierć.
+			GameState.in_run = true
 			GameState.save_game()
 			get_tree().change_scene_to_file("res://main.tscn")
 		"buy":
@@ -65,9 +67,14 @@ func choose(opt: Dictionary) -> void:
 			else:
 				GameState.message = "Brakuje Ci %d zł na: %s." % [room["cost"] - GameState.gold, room["name"]]
 		"rest":
-			GameState.rest()
-			GameState.save_game()
-			GameState.message = "Odpoczywasz. Dzień %d, HP %d/%d." % [GameState.day, GameState.hp, GameState.max_hp()]
+			if GameState.hp >= GameState.max_hp():
+				GameState.message = "Jesteś w pełni sił - nocleg nie jest potrzebny."
+			elif GameState.rest():
+				GameState.save_game()
+				GameState.message = "Odpoczywasz za %d zł. Dzień %d, HP %d/%d." % [
+					Balance.REST_COST, GameState.day, GameState.hp, GameState.max_hp()]
+			else:
+				GameState.message = "Nocleg kosztuje %d zł, a masz %d zł." % [Balance.REST_COST, GameState.gold]
 		"system":
 			system_open = true
 			system_cursor = 0

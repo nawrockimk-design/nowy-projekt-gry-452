@@ -43,7 +43,7 @@ func _ready() -> void:
 	player_hp = GameState.hp
 	inv_open = false
 	start_floor()
-	say("WASD = ruch, J/Spacja = atak, Shift = unik, K = %s, E = podnieś, I = plecak, F = portal do gildii." % Balance.SKILL_NAME, 8.0)
+	say("WASD = ruch, J/Spacja = atak, Shift = unik, K = %s, E = podnieś, I = plecak, F = portal/schody." % Balance.SKILL_NAME, 8.0)
 
 
 func start_floor() -> void:
@@ -77,7 +77,6 @@ func prepare_room(room: Dictionary) -> void:
 		e["state"] = "chase"
 		e["t"] = randf_range(0.3, 0.8)  # krótka chwila na reakcję po wejściu
 		e["flash"] = 0.0
-		e["aim"] = Vector2.ZERO
 
 
 # ---------- sterowanie ----------
@@ -94,10 +93,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_I:
 			inv_open = true
 			inv_cursor = 0
+			queue_redraw()  # _process przy otwartym plecaku nie rysuje, więc odświeżamy tu
 		KEY_E:
 			take_item()
 		KEY_F:
-			try_portal()
+			interact()
 		KEY_J, KEY_SPACE:
 			basic_attack()
 		KEY_K:
@@ -162,14 +162,12 @@ func update_player(room: Dictionary, delta: float) -> void:
 	auto_pickup(room)
 
 
+# Przejście przez drzwi dzieje się samo. Schody i portal wymagają klawisza F (patrz interact).
 func check_transitions(room: Dictionary) -> void:
 	var t := tile_of(player_pos)
 	var door_dir: Vector2i = dungeon.door_direction(t)
 	if door_dir != Vector2i.ZERO and room["doors"].has(door_dir) and room["enemies"].is_empty():
 		enter_room(dungeon.current + door_dir, door_dir)
-		return
-	if dungeon.current == dungeon.stairs_cell and t == Vector2i(Dungeon.CX, Dungeon.CY) and room["enemies"].is_empty():
-		next_floor()
 
 
 # Ruch kółka po siatce: najpierw oś X, potem Y, dzięki temu gracz ślizga się po ścianach.
@@ -265,7 +263,10 @@ func kill_enemy(room: Dictionary, e: Dictionary) -> void:
 	if randf() < 0.15:
 		room["items"].append({"pos": dead_tile, "item": Items.random_item(floor_num)})
 	if room["enemies"].is_empty():
-		say("Pokój oczyszczony - drzwi otwarte!")
+		if dungeon.current == dungeon.stairs_cell:
+			say("Pokój oczyszczony - drzwi otwarte! Stań na schodach (>) i naciśnij F, by zejść niżej.", 5.0)
+		else:
+			say("Pokój oczyszczony - drzwi otwarte!")
 
 
 # ---------- wrogowie ----------
@@ -283,7 +284,6 @@ func update_enemies(room: Dictionary, delta: float) -> void:
 				if to_player.length() <= Balance.ENEMY_ATTACK_RANGE + Balance.PLAYER_RADIUS:
 					e["state"] = "windup"
 					e["t"] = Balance.ENEMY_WINDUP
-					e["aim"] = to_player.normalized()
 				else:
 					var motion: Vector2 = to_player.normalized() * speed * delta + separation(room, e) * delta
 					e["p"] = move_circle(room, e["p"], motion, Balance.ENEMY_RADIUS, false)
@@ -418,12 +418,23 @@ func on_portal() -> bool:
 	return dungeon.current == dungeon.start_cell and tile_of(player_pos) == Vector2i(Dungeon.CX, Dungeon.CY)
 
 
-func try_portal() -> void:
-	if not on_portal():
-		say("Portal do gildii jest na środku pierwszego pokoju piętra.")
+# Schody działają dopiero po oczyszczeniu pokoju i tylko na środkowej kratce.
+func on_stairs() -> bool:
+	if dungeon.current != dungeon.stairs_cell or tile_of(player_pos) != Vector2i(Dungeon.CX, Dungeon.CY):
+		return false
+	return dungeon.current_room()["enemies"].is_empty()
+
+
+# F: schody w dół albo portal do gildii, zależnie od tego, gdzie stoisz.
+func interact() -> void:
+	if on_stairs():
+		next_floor()
 		return
-	GameState.return_from_dungeon(run_gold, floor_num, player_hp)
-	get_tree().change_scene_to_file("res://guild.tscn")
+	if on_portal():
+		GameState.return_from_dungeon(run_gold, floor_num, player_hp)
+		get_tree().change_scene_to_file("res://guild.tscn")
+		return
+	say("F działa na środku pierwszego pokoju (portal do gildii) i na schodach po oczyszczeniu pokoju.", 4.0)
 
 
 func enter_room(cell: Vector2i, dir: Vector2i) -> void:
@@ -590,6 +601,9 @@ func draw_hud(font: Font, rh: int) -> void:
 	if on_portal():
 		draw_string(font, Vector2(ORIGIN.x + 460, hud_y + 50), "F: wróć do gildii z łupem",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.45, 0.7, 1.0))
+	elif on_stairs():
+		draw_string(font, Vector2(ORIGIN.x + 460, hud_y + 50), "F: zejdź piętro niżej",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.4, 0.85, 0.5))
 
 	if log_timer > 0.0:
 		draw_string(font, Vector2(ORIGIN.x, hud_y + 76), log_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15)
@@ -618,7 +632,7 @@ func draw_minimap(font: Font) -> void:
 
 	draw_string(font, MINI_ORIGIN + Vector2(0, 160), "Czerwone drzwi: pokonaj wrogów", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 	draw_string(font, MINI_ORIGIN + Vector2(0, 182), "Pomarańczowy wróg: zaraz uderzy - uciekaj!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 204), "Zielone pole >: schody w dół", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
+	draw_string(font, MINI_ORIGIN + Vector2(0, 204), "Zielone pole >: schody w dół (F)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 	draw_string(font, MINI_ORIGIN + Vector2(0, 226), "Niebieski krąg: portal do gildii (F)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 
 	draw_string(font, MINI_ORIGIN + Vector2(0, 272), "Założone (I = plecak)", HORIZONTAL_ALIGNMENT_LEFT, -1, 16)

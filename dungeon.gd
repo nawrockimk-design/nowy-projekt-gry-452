@@ -69,8 +69,7 @@ func populate_room(room: Dictionary, is_stairs: bool, floor_num: int) -> void:
 		if op.x != CX and op.y != CY and not room["obstacles"].has(op):
 			room["obstacles"].append(op)
 
-	# wrogowie
-	var enemy_hp := 2 + floor_num
+	# wrogowie (tu tylko pozycja; HP i stan do walki dostają w main.gd -> prepare_room)
 	var count := randi_range(1, 2) + floori(floor_num / 3.0)
 	if is_stairs:
 		count += 2
@@ -82,7 +81,7 @@ func populate_room(room: Dictionary, is_stairs: bool, floor_num: int) -> void:
 			break
 		if min_entry_distance(ep) < 3 or ep == Vector2i(CX, CY):
 			continue
-		room["enemies"].append({"pos": ep, "hp": enemy_hp})
+		room["enemies"].append({"pos": ep})
 
 	# mikstura leżąca na podłodze
 	if randf() < 0.4:

@@ -64,9 +64,14 @@ const XP_PER_FLOOR := 1
 
 # ---------- gildia ----------
 const BASE_WEIGHT := 20
-const REST_HEAL_PCT := 0.3           # leczenie za dzień odpoczynku bez lecznicy
+const REST_HEAL_PCT := 0.3           # leczenie za dzień bez lecznicy (nocleg i powrót z lochu)
+const REST_COST := 10                # cena noclegu w gildii (zł); powrót z lochu jest darmowy
 const DEATH_HP_PCT := 0.3
 const STORAGE_WEIGHT_BONUS := 10
+
+# true: zamknięcie gry w trakcie wyprawy liczy się jak śmierć (utrata plecaka).
+# Na czas testów w edytorze Godot (F8 zatrzymuje grę) ustaw false.
+const QUIT_IN_RUN_IS_DEATH := true
 
 const ROOMS := [
 	{"id": "hall", "name": "Sala główna", "cost": 0, "info": "Serce gildii. Tablica zleceń i rekrutacja wkrótce."},
