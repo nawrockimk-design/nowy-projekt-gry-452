@@ -64,20 +64,46 @@ func separation(room: Dictionary, e: Dictionary) -> Vector2:
 		var d: Vector2 = e["p"] - other["p"]
 		var dist := d.length()
 		if dist > 0.01 and dist < Balance.ENEMY_RADIUS * 2.5:
-			push += d / dist * 60.0
+			push += d / dist * Balance.ENEMY_SEPARATION
 	return push
 
 
 func strike(e: Dictionary) -> void:
 	var player_pos: Vector2 = m.player_pos
-	if e["p"].distance_to(player_pos) > Balance.ENEMY_HIT_RANGE + Balance.PLAYER_RADIUS:
+	var allies: Array = m.current_allies
+	
+	# znajdź najbliższą cel (gracz lub sojusznik)
+	var target_pos := player_pos
+	var target_defense: int = m.inv.defense()
+	var target_is_player := true
+	var target_ally: Dictionary = {}
+	
+	var nearest_dist: float = e["p"].distance_to(player_pos)
+	for ally in allies:
+		if not ally.get("alive", true):
+			continue
+		var d: float = e["p"].distance_to(ally["p"])
+		if d < nearest_dist:
+			nearest_dist = d
+			target_pos = ally["p"]
+			target_defense = ally["defense"]
+			target_is_player = false
+			target_ally = ally
+	
+	if e["p"].distance_to(target_pos) > Balance.ENEMY_HIT_RANGE + Balance.PLAYER_RADIUS:
 		return
-	var invuln: float = m.invuln
-	if invuln > 0.0:
-		m.add_float(player_pos + Vector2(0, -20), "unik!", Color(0.6, 0.9, 1.0))
-		return
+	
+	if target_is_player:
+		var invuln: float = m.invuln
+		if invuln > 0.0:
+			m.add_float(player_pos + Vector2(0, -20), "unik!", Color(0.6, 0.9, 1.0))
+			return
+	
 	var floor_num: int = m.floor_num
-	var defense: int = m.inv.defense()
 	var max_dmg: int = Balance.ENEMY_BASE_DMG + floori(floor_num / 3.0)
-	var dmg: int = maxi(1, randi_range(1, max_dmg) - defense)
-	m.hurt_player(dmg)
+	var dmg: int = maxi(1, randi_range(1, max_dmg) - target_defense)
+	
+	if target_is_player:
+		m.hurt_player(dmg)
+	else:
+		m.hurt_ally(target_ally, dmg)

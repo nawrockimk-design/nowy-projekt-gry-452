@@ -15,7 +15,7 @@ static func draw_window(canvas: CanvasItem, font: Font, panel: Rect2, cursor: in
 
 	y += 40
 	canvas.draw_string(font, Vector2(x, y), "Klasa: %s     Poziom: %d     XP: %d/%d" % [
-		Balance.PLAYER_CLASS, GameState.level, GameState.xp, GameState.xp_to_next()], HORIZONTAL_ALIGNMENT_LEFT, -1, 17)
+		GameState.player_class, GameState.level, GameState.xp, GameState.xp_to_next()], HORIZONTAL_ALIGNMENT_LEFT, -1, 17)
 	y += 26
 	canvas.draw_string(font, Vector2(x, y), "HP: %d/%d     Atak: +%d     Prędkość: %d     Unik co %.2fs" % [
 		GameState.hp, GameState.max_hp(), GameState.attack_bonus(), GameState.move_speed(), GameState.dash_cooldown()],

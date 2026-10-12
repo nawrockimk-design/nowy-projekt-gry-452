@@ -8,9 +8,11 @@ const Balance = preload("res://balance.gd")
 const RoomView = preload("res://room_view.gd")
 const Hud = preload("res://hud.gd")
 const EnemyAI = preload("res://enemy_ai.gd")
+const AllyAI = preload("res://ally_ai.gd")
 
 var dungeon = Dungeon.new()
 var enemy_ai                         # tworzony w _ready (potrzebuje self)
+var ally_ai                           # sojusznicy
 var inv = GameState.inv
 var floor_num := 1
 var run_gold := 0
@@ -19,6 +21,7 @@ var log_timer := 0.0
 var game_over := false
 var inv_open := false
 var inv_cursor := 0
+var current_allies: Array = []       # kopia członków z drużyny dla aktualnego lochu
 
 # gracz (współrzędne w pikselach wewnątrz pokoju)
 var player_pos := Vector2.ZERO
@@ -40,10 +43,12 @@ var floats: Array = []               # latające napisy: {"pos", "text", "color"
 func _ready() -> void:
 	randomize()
 	enemy_ai = EnemyAI.new(self)
+	ally_ai = AllyAI.new(self)
 	floor_num = 1
 	run_gold = 0
 	player_hp = GameState.hp
 	inv_open = false
+	load_party()
 	start_floor()
 	say("WASD = ruch, J/Spacja = atak, Shift = unik, K = %s, E = podnieś, I = plecak, F = portal/schody." % Balance.SKILL_NAME, 8.0)
 
@@ -52,12 +57,22 @@ func start_floor() -> void:
 	dungeon.generate(floor_num)
 	player_pos = tile_center(Vector2i(Dungeon.CX, Dungeon.CY))
 	enemy_ai.prepare_room(dungeon.current_room())
+	for ally in current_allies:
+		ally_ai.prepare_ally(ally)
 	queue_redraw()
 
 
 func say(text: String, duration: float = 3.0) -> void:
 	log_text = text
 	log_timer = duration
+
+
+func load_party() -> void:
+	current_allies = []
+	var party := GameState.get_party_members()
+	for m in party:
+		var ally = m.duplicate()
+		current_allies.append(ally)
 
 
 func tile_center(t: Vector2i) -> Vector2:
@@ -135,6 +150,7 @@ func _process(delta: float) -> void:
 	var room: Dictionary = dungeon.current_room()
 	update_player(room, delta)
 	enemy_ai.update(room, delta)
+	ally_ai.update(room, delta)
 	check_transitions(room)
 	queue_redraw()
 
@@ -248,10 +264,24 @@ func kill_enemy(room: Dictionary, e: Dictionary) -> void:
 		player_hp += levels * Balance.HP_PER_LEVEL
 		say("[SYSTEM] Poziom %d! Punkty do rozdania w gildii (Tab)." % GameState.level, 4.0)
 		add_float(player_pos + Vector2(0, -28), "POZIOM!", Color(0.4, 0.75, 1.0))
-	if randf() < 0.25:
+	if randf() < Balance.DROP_POTION_CHANCE:
 		room["items"].append({"pos": dead_tile, "item": Items.potion()})
-	if randf() < 0.15:
+	if randf() < Balance.DROP_ITEM_CHANCE:
 		room["items"].append({"pos": dead_tile, "item": Items.random_item(floor_num)})
+	
+	# aktualizuj postęp zlecenia "hunt"
+	var active := GameState.active_quest
+	if not active.is_empty() and active["type"] == "hunt":
+		GameState.update_quest_progress(1)
+		if active["completed"]:
+			say("[ZLECENIE] Ukończone! Odbierz nagrodę w gildii.", 4.0)
+	
+	# aktualizuj postęp zlecenia "gather"
+	if not active.is_empty() and active["type"] == "gather":
+		GameState.update_quest_progress(gold)
+		if active["completed"]:
+			say("[ZLECENIE] Ukończone! Odbierz nagrodę w gildii.", 4.0)
+	
 	if room["enemies"].is_empty():
 		if dungeon.current == dungeon.stairs_cell:
 			say("Pokój oczyszczony - drzwi otwarte! Stań na schodach (>) i naciśnij F, by zejść niżej.", 5.0)
@@ -271,6 +301,17 @@ func hurt_player(dmg: int) -> void:
 		inv_open = false
 		death_timer = 2.5
 		say("Padasz na piętrze %d..." % floor_num, 3.0)
+
+
+func hurt_ally(ally: Dictionary, dmg: int) -> void:
+	ally["hp"] -= dmg
+	ally["flash"] = 0.12
+	add_float(ally["p"] + Vector2(0, -20), "-%d" % dmg, Color(1, 0.3, 0.3))
+	if ally["hp"] <= 0:
+		ally["hp"] = 0
+		ally["alive"] = false
+		add_float(ally["p"] + Vector2(0, -32), "POLEGŁ!", Color(0.8, 0.5, 0.5))
+		GameState.kill_member(ally["id"])
 
 
 # ---------- przedmioty na podłodze ----------
@@ -384,6 +425,9 @@ func enter_room(cell: Vector2i, dir: Vector2i) -> void:
 	room["visited"] = true
 	enemy_ai.prepare_room(room)
 	player_pos = tile_center(dungeon.entry_position(dir))
+	for ally in current_allies:
+		if ally.get("alive", true):
+			ally_ai.prepare_ally(ally)
 	if room["enemies"].is_empty():
 		say("Pusty pokój.")
 	else:
@@ -393,10 +437,10 @@ func enter_room(cell: Vector2i, dir: Vector2i) -> void:
 
 func next_floor() -> void:
 	floor_num += 1
-	player_hp = mini(player_hp + 3, GameState.max_hp())
+	player_hp = mini(player_hp + Balance.NEXT_FLOOR_HEAL, GameState.max_hp())
 	start_floor()
 	floats.clear()
-	say("Piętro %d. Leczysz się o 3. Portal (F) na środku tego pokoju." % floor_num, 4.0)
+	say("Piętro %d. Leczysz się o %d. Portal (F) na środku tego pokoju." % [floor_num, Balance.NEXT_FLOOR_HEAL], 4.0)
 
 
 # ---------- efekty ----------

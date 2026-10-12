@@ -1,5 +1,7 @@
 extends RefCounted
 
+const Balance = preload("res://balance.gd")
+
 const WEAPONS := ["Patyk", "Sztylet", "Miecz", "Topór bojowy", "Legendarny miecz"]
 const WEAPON_WEIGHTS := [2, 2, 4, 6, 5]
 const ARMORS := ["Szmaty", "Skórzana kurtka", "Kolczuga", "Płytowa zbroja", "Zbroja smoka"]
@@ -15,7 +17,7 @@ static func random_item(floor_num: int) -> Dictionary:
 
 
 static func potion() -> Dictionary:
-	return {"slot": "potion", "name": "Mikstura leczenia", "heal": 4, "weight": 1}
+	return {"slot": "potion", "name": "Mikstura leczenia", "heal": Balance.POTION_HEAL, "weight": 1}
 
 
 static func describe(item: Dictionary) -> String:

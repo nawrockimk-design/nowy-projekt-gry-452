@@ -1,71 +1,231 @@
-# PLAN GRY (zamrożony)
+# 🗡️ PLAN GRY
 
-> Ten plan zmieniamy tylko świadomie. Każdy nowy pomysł trafia do `POMYSLY.md`.
+> **Wersja 2** · 12.10.2026 · Pomysły i lore mają pierwszeństwo przed starym planem.
+> Plan zmieniamy tylko świadomie. Każdy nowy pomysł trafia do `POMYSLY.md`.
+> Nazwy własne pochodzą z dokumentu lore i są propozycjami. Zmieniamy je wyłącznie na polecenie autora.
 
-## Pomysł
-Wyrzucony z drużyny „słabeusz” osiada w małej wiosce i zakłada własną gildię poszukiwaczy przygód.
-W dniu 25. urodzin dostaje **System** (jak w Solo Leveling). Rozbudowuje gildię, sam chodzi do lochów i broni wioski.
+---
 
-- Gatunek: roguelike i budowanie gildii
-- Walka: w czasie rzeczywistym (bez tur). Mapa lochu z obecnego kodu zostaje, walkę przerabiamy.
-- Budujemy **tylko gildię**, a nie miasto
-- Silnik: Godot 4.7, GDScript
+## 🎯 W jednym zdaniu
 
-## Główna pętla
-1. **Gildia**: rekrutacja, zlecenia, kupowanie pokoi i budynków za złoto
-2. **Loch**: sam albo z drużyną (obecny `dungeon.gd` i `main.gd`)
-3. **Powrót**: doświadczenie idzie w System, materiały w crafting i wielkie dzieła
-4. **Wydarzenia**: losowe rozmowy z NPC, burmistrz, ataki potworów na wioskę
+Wyrzucony z drużyny poszukiwacz przygód, wyszkolony przez emerytowanego mistrza gildii, dostaje od zmarłego mentora wiedzę o bogach i **System**. Schodzi sam do lochów, rozwija gildię i buduje swoją pozycję w świecie, który żyje także bez niego.
 
-## Systemy
-- **Walka na żywo**: ruch, atak, unik (dash), 1 lub 2 umiejętności z cooldownem. Wrogowie mają czytelne zapowiedzi ataku.
-- **Rozmowy z ukrytym czasem**: każda rozmowa ma limit czasu na odpowiedź, którego gracz nie widzi. Gdy minie, NPC uznaje, że go olewasz, i relacja spada. Czas zależy od charakteru (duże ego = krócej, spokojny = dłużej). Gra nie pauzuje w trakcie rozmowy.
-- **System**: statystyki, umiejętności i drzewko rozwoju w jednym oknie. Działa tylko na gracza.
-- **Klasy** (na start 2 lub 3):
-  - Kowal: 100% craftingu, słabszy w walce
-  - Rycerz: mocny w walce, bez magii, podstawowy crafting
-  - Mag (opcjonalnie): magia, słaba obrona
-- **Wielkie dzieła**: posągi i ołtarze z bonusem dla każdego, kto ich użyje (np. +2% HP po modlitwie). Bardzo drogie i może je robić tylko gracz.
-- **Członkowie gildii**: AI pomaga w walce. Kto zginie, znika na zawsze. Każdy ma 1 lub 2 cechy charakteru.
-- **Rangi F do S**: dla członków i dla gildii. Odblokowują trudniejsze lochy i lepsze zlecenia.
-- **Ataki na wioskę**: duża arena z falami wrogów, co kilka dni.
+---
 
-## Relacje (punkty od -100 do 100)
+## 🧱 Fundamenty
+
+| Element | Ustalenie |
+|---|---|
+| Gatunek | Roguelike i budowanie gildii, w fabularnym świecie RPG |
+| Walka | W czasie rzeczywistym, bez tur |
+| Silnik | Godot 4.7, GDScript |
+| Rdzeń gry | Pętla: gildia → loch → powrót → wydarzenia |
+| Zakres na teraz | Gildia, a nie całe miasto ani imperium |
+| Zasada pracy | Etapami. Następną fazę zaczynamy dopiero, gdy poprzednia działa i jest grywalna |
+
+---
+
+## 📜 Fabuła
+
+| Wiek | Wydarzenie |
+|---|---|
+| 12 | Bohater zostaje poszukiwaczem przygód |
+| 12–15 | Przechodzi od drużyny do drużyny, nigdzie nie chcą go na stałe |
+| 16 | Dołącza do znanej drużyny, której przywódcą jest **Cedric Vane**. Traktują go jak maskotkę |
+| po sławie | Drużyna zastępuje go silniejszym członkiem, wyrzuca go i obraża |
+| ok. 16–18 | W **Dębowej Dolinie** poznaje **Edriana Vossa**, emerytowanego mistrza gildii. Przez około półtora roku uczy się walki i przetrwania |
+| dzień przed 18. urodzinami | Mentor umiera. We śnie bohater trafia do **Aetherionu**, gdzie dusza Edriana opowiada o swojej przeszłości, o bogach i o **Systemie** |
+| 18+ | Zaczyna się właściwa rozgrywka |
+
+Edrian kiedyś służył jednemu z bogów. Któremu, ustala autor (patrz „Decyzje do podjęcia”).
+
+---
+
+## 🌍 Świat: Eryndor
+
+| Miejsce | Opis |
+|---|---|
+| **Eryndor** | Główny kontynent |
+| **Aetherion** | Kraina pomiędzy światem żywych a domenami bogów |
+| **Dębowa Dolina** | Małe miasteczko, w którym bohater poznaje mentora (prawdopodobny start gry) |
+| **Valdoria** | Stolica królestwa i siedziba Wielkiej Gildii |
+| **Góry Grzmiącego Szczytu** | Region górniczy, kopalnie i podziemne miasta |
+| **Szmaragdowa Knieja** | Pradawny las pełen magii i niebezpiecznych stworzeń |
+| **Ruiny Ashenfall** | Pozostałości po upadłym imperium |
+| **Merovia** | Republika kupiecka |
+| **Ziemie Wyklętych** | Niebezpieczny region poza kontrolą królestw |
+
+Na początku gra pokazuje tylko okolicę startową. Reszta świata dochodzi etapami (patrz „Fazy”).
+
+---
+
+## ⚡ Bogowie
+
+| Bóg | Domena |
+|---|---|
+| **Avaros** | Wojna i siła |
+| **Elyra** | Wiedza i magia |
+| **Nyxara** | Cień i podstęp |
+| **Sylvara** | Życie i natura |
+| **Morveth** | Śmierć i dusze |
+| **Solther** | Porządek i przysięgi |
+| **Vael** | Chaos i zmiany |
+
+**Zasady:**
+- Każdy bóg ma osobowość, cele, wyznawców i własny stosunek do śmiertelników.
+- Relacje z bogami wpływają na rozgrywkę: błogosławieństwa, umiejętności i zadania albo klątwy, utrata bonusów i dodatkowi przeciwnicy.
+- Bogowie **nie są tylko systemem bonusów**: pamiętają decyzje gracza, reagują na nie i mają własne interesy.
+- Ich cele mogą ze sobą kolidować, więc pomoc jednemu może zepsuć relację z innym.
+
+---
+
+## 🔁 Główna pętla
+
+1. **Gildia**: zlecenia, rekrutacja, kupowanie pokoi i budynków za złoto
+2. **Loch**: sam albo z drużyną, walka na żywo, łup
+3. **Powrót**: doświadczenie idzie w System, materiały w rzemiosło i wielkie dzieła
+4. **Wydarzenia**: rozmowy z NPC, ataki na wioskę, zmiany w świecie
+
+---
+
+## ⚙️ Systemy
+
+### Walka i wybór klasy
+Walka w czasie rzeczywistym: ruch, atak, unik (dash), 1 lub 2 umiejętności z cooldownem. Wrogowie mają czytelne zapowiedzi ataku.
+Na początku gry gracz wybiera klasę: Wojownik, Rycerz, Mag, Kapłan, Łowca, Inżynier, Kowal albo Alchemik. W tej wersji wybór zapisuje i pokazuje klasę; unikalne umiejętności klasowe nie są jeszcze dodane.
+
+### System (rozwój postaci)
+Statystyki, umiejętności i drzewko w jednym oknie. Działa tylko na gracza.
+Kierunek docelowy to duże drzewko w stylu Path of Exile: wiele ścieżek, wybory wymagające poświęceń, synergie z ekwipunkiem i błogosławieństwami, rzadkie potężne węzły. Błędy w rozwoju mają konsekwencje, ale nie niszczą postaci bezpowrotnie.
+Na start: Siła, Wytrzymałość, Zręczność.
+
+### Gildia, rangi i członkowie
+- Pokoje gildii kupowane za złoto (tabela niżej).
+- Członkowie: AI pomaga w walce, każdy ma 1 lub 2 cechy charakteru. **Kto zginie, znika na zawsze.**
+- Rangi odblokowują trudniejsze lochy i lepsze zlecenia (system rang czeka na decyzję, patrz niżej).
+
+### Relacje z NPC (punkty od -100 do 100)
+
 | Kto | Dobra relacja | Zła relacja |
 |---|---|---|
 | Burmistrz | zniżki, zlecenia, zgody na budynki | podatki, blokada rozbudowy |
 | Członkowie z ego | lojalność, bonusy | odchodzą, kradną, stają się wrogami |
 | Losowi przybysze | rzadkie przedmioty, rekruci | zemsta, gorsza reputacja |
 
-## Pokoje gildii (ceny przykładowe)
-| Pokój | Koszt | Odblokowuje |
-|---|---|---|
-| Sala główna | 0 | tablica zleceń, rekrutacja |
-| Kuźnia | 150 | crafting |
-| Magazyn | 200 | więcej miejsca na materiały |
-| Koszary | 250 | więcej członków |
-| Lecznica | 300 | leczenie po lochu |
-| Kaplica | 800 | wielkie dzieła |
+NPC pamiętają działania gracza, mogą odmówić współpracy z powodu reputacji i zmieniać cele oraz miejsce pobytu.
 
-## Fazy
-- [x] **Faza 1 (MVP)**: obecny loch z walką przerobioną na czas rzeczywisty, ekran gildii z 2 lub 3 pokojami, złoto i zapis gry, proste okno Systemu, 1 klasa
-  - Zrobione: `game_state.gd` (autoload + zapis), `balance.gd`, `guild.tscn`/`guild.gd` (Sala główna, Magazyn, Lecznica), `system_window.gd` (Siła/Wytrzymałość/Zręczność), walka na żywo w `main.gd` (atak, unik, Cięcie wirowe, zapowiedzi ataku wrogów), portal powrotny do gildii. Do przegrania i balansu.
-- [ ] **Faza 2 (Członkowie)**: AI w lochu, permadeath, cechy, rangi F do S, tablica zleceń
-- [ ] **Faza 3 (Relacje)**: burmistrz, losowe rozmowy z wyborami i ukrytym czasem, bunt członków z ego
-- [ ] **Faza 4 (Obrona i dzieła)**: ataki na wioskę, wielkie dzieła, kaplica
-- [ ] **Faza 5 (Rozwój)**: 2 lub 3 klasy, pełne drzewko, dawna drużyna jako rywal
+### Rozmowy z ukrytym czasem
+Każda rozmowa ma limit czasu na odpowiedź, którego gracz nie widzi. Gdy minie, NPC uznaje, że go olewasz, i relacja spada. Czas zależy od charakteru: duże ego to krócej, spokojny to dłużej. Gra nie pauzuje w trakcie rozmowy.
 
-Następną fazę zaczynamy dopiero, gdy poprzednia działa i jest grywalna.
+### Wielkie dzieła
+Posągi i ołtarze z bonusem dla każdego, kto ich użyje (np. +2% HP po modlitwie). Bardzo drogie, może je robić tylko gracz. Powiązanie z bogami to pomysł do potwierdzenia.
 
-## Na razie nie
-- Budowanie całego miasta
-- Dużo klas naraz
+### Ataki na wioskę
+Duża arena z falami wrogów, co kilka dni. Gildia broni wioski.
+
+### Ekwipunek i rzemiosło
+Broń, zbroje i akcesoria mają wytrzymałość i wymagają napraw. Jakość zależy od materiałów, umiejętności i wykonania. Profesje (kowalstwo, alchemia i inne) mają własne ścieżki, a minigry wpływają na jakość przedmiotów.
+W kodzie już działa udźwig i plecak z wagą przedmiotów.
+
+### Dynamiczny świat
+Małe wydarzenia (napady, zaginięcia, konflikty handlowe) pojawiają się często. Duże wydarzenia (przebudzenie smoka, wojny, upadek królestwa) mniej więcej co pięć lat czasu gry i mają trwałe skutki. Świat nie stoi w miejscu, gdy gracz nie bierze udziału.
+
+---
+
+## 🏠 Pokoje gildii (ceny przykładowe)
+
+| Pokój | Koszt | Odblokowuje | W kodzie |
+|---|---|---|---|
+| Sala główna | 0 | tablica zleceń, rekrutacja | ✅ |
+| Kuźnia | 150 | rzemiosło | – |
+| Magazyn | 200 | +10 udźwigu | ✅ |
+| Koszary | 250 | więcej członków | – |
+| Lecznica | 300 | pełne leczenie po dniu | ✅ |
+| Kaplica | 800 | wielkie dzieła | – |
+
+---
+
+## 🗺️ Fazy
+
+Status „mechanika zrobiona” oznacza, że dana funkcja działa już w kodzie; nie oznacza ukończenia całej fazy.
+
+- [x] **Faza 1 (MVP)**: loch z walką na żywo, ekran gildii z 3 pokojami, złoto i zapis gry, proste okno Systemu, 1 klasa
+  - Zrobione: `game_state.gd` (autoload i zapis), `balance.gd`, `guild.tscn`/`guild.gd`, `system_window.gd`, walka na żywo w `main.gd` (atak, unik, Cięcie wirowe, zapowiedzi ataku), portal powrotny, plecak z wagą.
+  - [x] **Mechanika zrobiona:** poprawki po teście: plecak odświeża się po otwarciu, schody i portal działają na **F**, nocleg jest płatny, zamknięcie gry podczas wyprawy jest traktowane jak śmierć.
+- [x] **Faza 1.5 (Świat i klasa)**: intro z lore (18. urodziny, Aetherion), wybór klasy początkowej, rozbicie `main.gd` na kilka skryptów
+  - [x] **Mechanika zrobiona:** rozbicie `main.gd` na skrypty `enemy_ai.gd`, `room_view.gd` i `hud.gd`.
+  - [x] **Mechanika zrobiona:** unik (dash) z kierunkiem, czasem trwania i cooldownem.
+  - [x] **Mechanika zrobiona:** intro przedstawia wyrzucenie z drużyny, szkolenie przez Edriana, Aetherion i rozpoczęcie gry w wieku 18 lat.
+  - [x] **Mechanika zrobiona:** wybór i zapis klasy początkowej; unikalne umiejętności klasowe pozostają na później.
+- [x] **Faza 2 (Członkowie)**: AI w lochu, permadeath, cechy, rangi, tablica zleceń
+  - [x] **Mechanika zrobiona:** rekrutowanie członków z losowymi statystykami, rangą początkową i 1–2 cechami.
+  - [x] **Mechanika zrobiona:** wybór członków do drużyny, sojusznicze AI w lochu i walka z wrogami.
+  - [x] **Mechanika zrobiona:** śmierć członka usuwa go z drużyny i uniemożliwia ponowne użycie; poległy pozostaje widoczny na liście.
+  - [x] **Mechanika zrobiona:** tablica zleceń, przyjmowanie zlecenia, śledzenie postępu i odbieranie nagrody.
+  - [x] **Mechanika zrobiona:** doświadczenie członków za ukończone piętra lochu; awans zwiększa ich atak i maksymalne HP.
+  - [x] **Mechanika zrobiona:** doświadczenie gildii za odebrane zlecenia, progi rang oraz ograniczenie rangi dostępnych zleceń rangą gildii.
+- [ ] **Faza 3 (Relacje)**: burmistrz, rozmowy z wyborami i ukrytym czasem, bunt członków z ego
+- [ ] **Faza 4 (Obrona i dzieła)**: ataki na wioskę, wielkie dzieła, kaplica, rzemiosło w kuźni
+- [ ] **Faza 5 (Bogowie i rozwój)**: błogosławieństwa i klątwy, pełne drzewko, kolejne klasy, dawna drużyna jako rywal
+- [ ] **Później**: kolejne miasta i krainy, Wielka Gildia i Valdoria, polityka, ukryte organizacje, ekonomia, wielkie wydarzenia co pięć lat, rozgałęziona fabuła i zakończenia, relacje romantyczne, własne imperium (nieruchomości, pracownicy, wpływy)
+
+Kolejność faz od 1.5 wzwyż to propozycja do zatwierdzenia.
+
+---
+
+## 🚫 Na razie nie
+
+- Własne imperium i zarządzanie biznesami
+- Cały otwarty świat naraz
 - Realistyczna ekonomia i handel
-- Otwarty świat
+- Wiele klas naraz
 - Walka turowa
+- Wszystkie miasta i krainy jednocześnie
 
-## Architektura (propozycja do fazy 1)
-- `game_state.gd` jako autoload: złoto, statystyki gracza, kupione pokoje, dzień. Zapis i odczyt w `user://save.json`.
-- `guild.tscn` i `guild.gd`: ekran gildii z kupowaniem pokoi
-- `main.tscn` (obecny loch) zostaje. Po wyjściu z lochu złoto trafia do `GameState`, potem wracasz do gildii.
-- `balance.gd`: wszystkie ceny i liczby w jednym miejscu
+---
+
+## ❓ Decyzje do podjęcia
+
+1. **Własna gildia a Wielka Gildia.** Jak się mają do siebie?
+   - **A.** Dwie osobne rzeczy: własna gildia gracza rośnie w Dębowej Dolinie, a rangi to jego osobista ranga w Wielkiej Gildii.
+   - **B.** Rangi dotyczą własnej gildii gracza, a Wielka Gildia jest tłem i konkurentem.
+   - **C.** Gracz zaczyna jako członek Wielkiej Gildii, a własną zakłada później.
+2. **Rangi.** Zostają litery F–S z obecnymi nazwami wyświetlanymi w grze.
+3. **Któremu bogu służył Edrian Voss?**
+4. **Imię bohatera i nazwa jego gildii.** W kodzie tymczasowo jest nazwa „Odrzuceni”.
+5. **Umiejętności klasowe.** Na razie nie dodajemy osobnych umiejętności dla klas; wrócimy do nich później.
+6. **Czy wielkie dzieła są ołtarzami konkretnych bogów?**
+
+---
+
+## 🧭 Zasady pracy
+
+- Nie wymyślamy nazw własnych bez zgody autora. Brakujące nazwy zapisujemy jako pytania.
+- Przy ważnej decyzji projektowej Claude przedstawia opcje i czeka na wybór.
+- Każdy nowy pomysł trafia do `POMYSLY.md`. Po zakończonej fazie wybieramy stamtąd 1 lub 2 rzeczy.
+- Wszystkie ceny i liczby żyją w `balance.gd`.
+
+---
+
+## 🧩 Architektura
+
+| Plik | Rola |
+|---|---|
+| `game_state.gd` | Autoload: złoto, statystyki, pokoje, dzień, ekwipunek. Zapis w `user://save.json` |
+| `balance.gd` | Wszystkie ceny i liczby w jednym miejscu |
+| `guild.tscn`, `guild.gd` | Ekran gildii: pokoje, nocleg, wyjście do lochu |
+| `system_window.gd` | Okno Systemu (statystyki) |
+| `main.tscn`, `main.gd` | Loch: pętla gry, walka gracza, pokoje i piętra |
+| `dungeon.gd` | Generator pięter i pokoi |
+| `inventory.gd`, `items.gd` | Plecak z wagą i przedmioty |
+
+Planowane po rozbiciu `main.gd` w Fazie 1.5: `enemy_ai.gd` (wrogowie), `room_view.gd` (rysowanie pokoju), `hud.gd` (interfejs). W Fazie 2 do tego dołączy skrypt sojuszników w tym samym stylu.
+
+---
+
+## 🔄 Zmiany względem wersji 1
+
+- Bohater: wiek startu 18 lat (wcześniej 25), nowa historia z mentorem i Aetherionem.
+- Klasa głównego bohatera: wybierana na początku gry spośród Wojownika, Rycerza, Maga, Kapłana, Łowcy, Inżyniera, Kowala i Alchemika.
+- Dodane: świat Eryndor, siedmiu bogów, dynamiczny świat, drzewko w stylu Path of Exile, rzemiosło z wytrzymałością, plan późniejszego imperium.
+- Zachowane: pętla gildia → loch, walka na żywo, permadeath członków, rozmowy z ukrytym czasem, wielkie dzieła, ataki na wioskę.

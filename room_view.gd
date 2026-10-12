@@ -48,6 +48,7 @@ static func draw_room(canvas: CanvasItem, m, font: Font) -> void:
 	var invuln: float = m.invuln
 	var game_over: bool = m.game_over
 	var floats: Array = m.floats
+	var allies: Array = m.current_allies
 
 	# podłoga
 	canvas.draw_rect(Rect2(ORIGIN, Vector2(rw * TILE, rh * TILE)), Color(0.1, 0.1, 0.12))
@@ -121,6 +122,22 @@ static func draw_room(canvas: CanvasItem, m, font: Font) -> void:
 		player_color = Color(0.9, 0.8, 0.2, 0.5)
 	canvas.draw_circle(pp, Balance.PLAYER_RADIUS, player_color)
 	canvas.draw_line(pp, pp + facing * (Balance.PLAYER_RADIUS + 6), Color(0.2, 0.15, 0.05), 3.0)
+
+	# sojusznicy
+	for ally in allies:
+		if not ally.get("alive", true):
+			continue
+		var ap: Vector2 = ORIGIN + ally["p"]
+		var ally_color := Color(0.4, 0.6, 0.9)
+		if ally["flash"] > 0.0:
+			ally_color = Color.WHITE
+		elif ally["state"] == "windup":
+			ally_color = Color(0.6, 0.8, 1.0)
+		elif ally["state"] == "recover":
+			ally_color = Color(0.3, 0.4, 0.6)
+		canvas.draw_circle(ap, Balance.ENEMY_RADIUS, ally_color)
+		if ally["hp"] < ally["max_hp"]:
+			draw_bar(canvas, ap + Vector2(-16, -26), Vector2(32, 4), float(ally["hp"]) / ally["max_hp"], Color(0.4, 0.6, 1.0))
 
 	# latające napisy
 	for f in floats:

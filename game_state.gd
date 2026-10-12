@@ -3,11 +3,21 @@ extends Node
 
 const Balance = preload("res://balance.gd")
 const Inventory = preload("res://inventory.gd")
+const Quests = preload("res://quests.gd")
+const Members = preload("res://members.gd")
+
+var quest_system = Quests.new()
+var member_system = Members.new()
+
+const RANKS := ["F", "E", "D", "C", "B", "A", "S"]
 
 const SAVE_PATH := "user://save.json"
+const SAVE_TMP := "user://save.json.tmp"
 
 var gold := 0
 var day := 1
+var player_class := ""
+var intro_complete := false
 var level := 1
 var xp := 0
 var stat_points := 0
@@ -16,6 +26,11 @@ var hp := Balance.BASE_HP
 var rooms: Array = ["hall"]
 var best_floor := 0
 var inv = Inventory.new()
+var members: Array = []             # lista członków gildii
+var guild_rank := "F"              # ranga gildii
+var guild_xp := 0
+var quests: Array = []             # dostępne zlecenia
+var active_quest: Dictionary = {}  # aktualnie aktywne zlecenie
 var message := ""                   # komunikat do pokazania w gildii
 var in_run := false                 # true od wejścia do lochu do powrotu portalem lub śmierci
 
@@ -23,11 +38,16 @@ var in_run := false                 # true od wejścia do lochu do powrotu porta
 func _ready() -> void:
 	if not load_game():
 		reset()
+	else:
+		if quests.is_empty():
+			generate_quests()
 
 
 func reset() -> void:
 	gold = 0
 	day = 1
+	player_class = ""
+	intro_complete = false
 	level = 1
 	xp = 0
 	stat_points = 0
@@ -37,8 +57,14 @@ func reset() -> void:
 	in_run = false
 	inv.reset()
 	refresh_inventory()
+	members = []
+	guild_rank = "F"
+	guild_xp = 0
+	quests = []
+	active_quest = {}
 	hp = max_hp()
-	message = "Dziś kończysz 25 lat. Coś w Twojej głowie mówi: [SYSTEM AKTYWNY]."
+	generate_quests()
+	message = "Dziś kończysz 18 lat. Coś w Twojej głowie mówi: [SYSTEM AKTYWNY]."
 
 
 # ---------- statystyki ----------
@@ -108,6 +134,133 @@ func refresh_inventory() -> void:
 		inv.max_weight += Balance.STORAGE_WEIGHT_BONUS
 
 
+# ---------- członkowie gildii ----------
+
+func recruit_member(member: Dictionary) -> bool:
+	if gold < member["cost"]:
+		return false
+	gold -= member["cost"]
+	members.append(member)
+	save_game()
+	return true
+
+
+func remove_member(member_id: String) -> void:
+	for i: int in members.size():
+		if members[i]["id"] == member_id:
+			members.remove_at(i)
+			break
+	save_game()
+
+
+func kill_member(member_id: String) -> void:
+	for m in members:
+		if m["id"] == member_id:
+			m["alive"] = false
+			m["in_party"] = false
+			break
+	save_game()
+
+
+func get_party_members() -> Array:
+	var party := []
+	for m in members:
+		if m.get("alive", true) and m.get("in_party", false):
+			party.append(m)
+	return party
+
+
+func clear_party() -> void:
+	for m: Dictionary in members:
+		m["in_party"] = false
+
+
+func max_party_size() -> int:
+	return Balance.MAX_PARTY_SIZE if has_room("barracks") else 0
+
+
+func guild_xp_to_next() -> int:
+	var idx: int = Balance.RANKS.find(guild_rank)
+	if idx == -1 or idx >= Balance.RANKS.size() - 1:
+		return 999999
+	return Balance.GUILD_RANK_XP[idx + 1]
+
+
+func add_guild_xp(amount: int) -> bool:
+	if amount <= 0:
+		return false
+	guild_xp += amount
+	var current_idx := Balance.RANKS.find(guild_rank)
+	if current_idx == -1:
+		current_idx = 0
+	var original_rank := guild_rank
+	while current_idx < Balance.RANKS.size() - 1 and guild_xp >= Balance.GUILD_RANK_XP[current_idx + 1]:
+		current_idx += 1
+		guild_rank = Balance.RANKS[current_idx]
+	return guild_rank != original_rank
+
+
+func award_party_member_xp(amount: int) -> Array[String]:
+	var promoted_names: Array[String] = []
+	if amount <= 0:
+		return promoted_names
+	for member in members:
+		if not member.get("alive", true) or not member.get("in_party", false):
+			continue
+		if member_system.promote_member(member, amount):
+			promoted_names.append(str(member.get("name", "Członek gildii")))
+	return promoted_names
+
+
+# ---------- zlecenia ----------
+
+func generate_quests() -> void:
+	quests = []
+	var count := 3 + floori(best_floor / 2.0)
+	var guild_rank_idx := maxi(0, Balance.RANKS.find(guild_rank))
+	for _i in count:
+		var q: Dictionary = quest_system.generate_quest(best_floor + 1, guild_rank_idx)
+		quests.append(q)
+
+
+func accept_quest(quest_id: String) -> bool:
+	if not active_quest.is_empty():
+		return false
+	for i in quests.size():
+		var q: Dictionary = quests[i]
+		if q["id"] == quest_id:
+			active_quest = q.duplicate()
+			quest_system.start_quest(active_quest)
+			quests.remove_at(i)
+			save_game()
+			return true
+	return false
+
+
+func complete_quest() -> int:
+	if active_quest.is_empty() or not active_quest.get("completed", false):
+		return 0
+	var quest_id: String = str(active_quest.get("id", ""))
+	var reward: int = int(active_quest.get("reward", 0))
+	gold += reward
+	add_guild_xp(Balance.GUILD_XP_PER_QUEST)
+	active_quest = {}
+	
+	# Czyść również stare zapisy, w których przyjęte zlecenie zostało na tablicy.
+	for i in quests.size():
+		if quests[i].get("id", "") == quest_id:
+			quests.remove_at(i)
+			break
+	
+	save_game()
+	return reward
+
+
+func update_quest_progress(amount: int = 1) -> void:
+	if not active_quest.is_empty():
+		quest_system.update_progress(active_quest, amount)
+
+
 # Nowy dzień z leczeniem: z Lecznicą pełne, bez niej część HP.
 func next_day() -> void:
 	day += 1
@@ -115,6 +268,10 @@ func next_day() -> void:
 		hp = max_hp()
 	else:
 		hp = mini(max_hp(), hp + ceili(max_hp() * Balance.REST_HEAL_PCT))
+	
+	# generuj nowe zlecenia co kilka dni
+	if day % 3 == 1:
+		generate_quests()
 
 
 # Płatny nocleg w gildii. Zwraca false, gdy brakuje złota.
@@ -132,8 +289,15 @@ func return_from_dungeon(run_gold: int, floor_reached: int, player_hp: int) -> v
 	gold += run_gold
 	best_floor = maxi(best_floor, floor_reached)
 	hp = player_hp
-	next_day()
-	message = "Wracasz z piętra %d z %d zł. Nowy dzień: %d." % [floor_reached, run_gold, day]
+	# Wyjście od razu po wejściu (bez łupu i bez zejścia niżej) nie daje darmowego dnia ani leczenia.
+	if run_gold > 0 or floor_reached > 1:
+		next_day()
+		var promotions := award_party_member_xp(maxi(0, floor_reached - 1) * Balance.MEMBER_XP_PER_FLOOR)
+		message = "Wracasz z piętra %d z %d zł. Nowy dzień: %d." % [floor_reached, run_gold, day]
+		if not promotions.is_empty():
+			message += " Awans: %s." % ", ".join(PackedStringArray(promotions))
+	else:
+		message = "Wracasz do gildii bez wyprawy. Dzień się nie zmienił."
 	save_game()
 
 
@@ -162,13 +326,20 @@ func abandon_run() -> void:
 
 func save_game() -> void:
 	var data := {
-		"gold": gold, "day": day, "level": level, "xp": xp, "stat_points": stat_points,
+		"version": Balance.SAVE_VERSION,
+		"gold": gold, "day": day, "player_class": player_class, "intro_complete": intro_complete,
+		"level": level, "xp": xp, "stat_points": stat_points,
 		"stats": stats, "hp": hp, "rooms": rooms, "best_floor": best_floor,
 		"weapon": inv.weapon, "armor": inv.armor, "pack": inv.pack, "in_run": in_run,
+		"members": members, "guild_rank": guild_rank, "guild_xp": guild_xp, "quests": quests, "active_quest": active_quest,
 	}
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify(data))
+	# Zapis atomowy: najpierw plik tymczasowy, potem podmiana, żeby crash w trakcie nie psuł save'a.
+	var f := FileAccess.open(SAVE_TMP, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(data))
+	f.close()
+	DirAccess.rename_absolute(ProjectSettings.globalize_path(SAVE_TMP), ProjectSettings.globalize_path(SAVE_PATH))
 
 
 func load_game() -> bool:
@@ -183,6 +354,10 @@ func load_game() -> bool:
 	# JSON zwraca liczby jako float, więc wszystko rzutujemy na int.
 	gold = int(data.get("gold", 0))
 	day = int(data.get("day", 1))
+	player_class = str(data.get("player_class", ""))
+	intro_complete = bool(data.get("intro_complete", true))
+	if not player_class.is_empty() and player_class not in Balance.PLAYER_CLASSES:
+		player_class = "Rycerz"
 	level = int(data.get("level", 1))
 	xp = int(data.get("xp", 0))
 	stat_points = int(data.get("stat_points", 0))
@@ -200,6 +375,27 @@ func load_game() -> bool:
 	refresh_inventory()
 	hp = clampi(int(data.get("hp", max_hp())), 1, max_hp())
 	in_run = false
+	
+	# członkowie gildii
+	members = data.get("members", [])
+	guild_rank = data.get("guild_rank", "F")
+	if not Balance.RANKS.has(guild_rank):
+		guild_rank = "F"
+	var saved_rank_idx: int = Balance.RANKS.find(guild_rank)
+	guild_xp = int(data.get("guild_xp", Balance.GUILD_RANK_XP[maxi(0, saved_rank_idx)]))
+	for member in members:
+		var member_rank_idx: int = Balance.RANKS.find(member.get("rank", "F"))
+		if member_rank_idx < 0:
+			member_rank_idx = 0
+			member["rank"] = "F"
+		member["xp"] = int(member.get("xp", Balance.MEMBER_RANK_XP[member_rank_idx]))
+	if not has_room("barracks"):
+		clear_party()
+	
+	# zlecenia
+	quests = data.get("quests", [])
+	active_quest = data.get("active_quest", {})
+	
 	message = "Wczytano zapis. Dzień %d." % day
 	if bool(data.get("in_run", false)) and Balance.QUIT_IN_RUN_IS_DEATH:
 		abandon_run()

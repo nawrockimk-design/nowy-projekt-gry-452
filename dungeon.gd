@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Items = preload("res://items.gd")
+const Balance = preload("res://balance.gd")
 
 const ROOM_W := 15
 const ROOM_H := 9
@@ -84,13 +85,13 @@ func populate_room(room: Dictionary, is_stairs: bool, floor_num: int) -> void:
 		room["enemies"].append({"pos": ep})
 
 	# mikstura leżąca na podłodze
-	if randf() < 0.4:
+	if randf() < Balance.FLOOR_POTION_CHANCE:
 		var pp := random_free_tile(room)
 		if pp != Vector2i(-1, -1) and pp != Vector2i(CX, CY):
 			room["items"].append({"pos": pp, "item": Items.potion()})
 
 	# broń lub zbroja leżąca na podłodze
-	if randf() < 0.35:
+	if randf() < Balance.FLOOR_ITEM_CHANCE:
 		var ip := random_free_tile(room)
 		if ip != Vector2i(-1, -1) and ip != Vector2i(CX, CY):
 			room["items"].append({"pos": ip, "item": Items.random_item(floor_num)})

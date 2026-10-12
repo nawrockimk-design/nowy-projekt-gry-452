@@ -34,6 +34,16 @@ static func draw_hud(canvas: CanvasItem, m, font: Font) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.6, 0.9, 0.6) if dash_ready else Color(0.6, 0.6, 0.6))
 	canvas.draw_string(font, Vector2(origin.x + 200, hud_y + 50), "%s [K]: %s" % [Balance.SKILL_NAME, "gotowe" if skill_ready else "%.1fs" % skill_cd],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.5, 0.8, 1.0) if skill_ready else Color(0.6, 0.6, 0.6))
+	
+	# info o sojusznikach
+	var allies: Array = m.current_allies
+	var alive_allies := 0
+	for a in allies:
+		if a.get("alive", true):
+			alive_allies += 1
+	if alive_allies > 0:
+		canvas.draw_string(font, Vector2(origin.x, hud_y + 70), "Sojusznicy: %d" % alive_allies,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.4, 0.6, 0.9))
 	if m.on_portal():
 		canvas.draw_string(font, Vector2(origin.x + 460, hud_y + 50), "F: wróć do gildii z łupem",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.45, 0.7, 1.0))
