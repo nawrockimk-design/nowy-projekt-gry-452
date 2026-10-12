@@ -1,15 +1,16 @@
 extends Node2D
-# Loch z walką w czasie rzeczywistym. Mapa i generator pokoi z dungeon.gd zostają bez zmian.
+# Loch z walką w czasie rzeczywistym: pętla gry, sterowanie, walka gracza, pokoje i piętra.
+# Wrogowie: enemy_ai.gd. Rysowanie: room_view.gd (pokój) i hud.gd (interfejs).
 
 const Items = preload("res://items.gd")
 const Dungeon = preload("res://dungeon.gd")
 const Balance = preload("res://balance.gd")
-
-const TILE := 48
-const ORIGIN := Vector2(24, 24)
-const MINI_ORIGIN := Vector2(800, 40)
+const RoomView = preload("res://room_view.gd")
+const Hud = preload("res://hud.gd")
+const EnemyAI = preload("res://enemy_ai.gd")
 
 var dungeon = Dungeon.new()
+var enemy_ai                         # tworzony w _ready (potrzebuje self)
 var inv = GameState.inv
 var floor_num := 1
 var run_gold := 0
@@ -38,6 +39,7 @@ var floats: Array = []               # latające napisy: {"pos", "text", "color"
 
 func _ready() -> void:
 	randomize()
+	enemy_ai = EnemyAI.new(self)
 	floor_num = 1
 	run_gold = 0
 	player_hp = GameState.hp
@@ -49,7 +51,7 @@ func _ready() -> void:
 func start_floor() -> void:
 	dungeon.generate(floor_num)
 	player_pos = tile_center(Vector2i(Dungeon.CX, Dungeon.CY))
-	prepare_room(dungeon.current_room())
+	enemy_ai.prepare_room(dungeon.current_room())
 	queue_redraw()
 
 
@@ -59,24 +61,11 @@ func say(text: String, duration: float = 3.0) -> void:
 
 
 func tile_center(t: Vector2i) -> Vector2:
-	return Vector2(t * TILE) + Vector2(TILE, TILE) * 0.5
+	return RoomView.tile_center(t)
 
 
 func tile_of(p: Vector2) -> Vector2i:
-	return Vector2i(floori(p.x / TILE), floori(p.y / TILE))
-
-
-# Wrogowie z generatora mają tylko pozycję na kratce - tu dostają stan do walki na żywo.
-func prepare_room(room: Dictionary) -> void:
-	for e in room["enemies"]:
-		if e.has("p"):
-			continue
-		e["p"] = tile_center(e["pos"])
-		e["hp"] = Balance.ENEMY_BASE_HP + floor_num * Balance.ENEMY_HP_PER_FLOOR
-		e["max_hp"] = e["hp"]
-		e["state"] = "chase"
-		e["t"] = randf_range(0.3, 0.8)  # krótka chwila na reakcję po wejściu
-		e["flash"] = 0.0
+	return RoomView.tile_of(p)
 
 
 # ---------- sterowanie ----------
@@ -145,7 +134,7 @@ func _process(delta: float) -> void:
 
 	var room: Dictionary = dungeon.current_room()
 	update_player(room, delta)
-	update_enemies(room, delta)
+	enemy_ai.update(room, delta)
 	check_transitions(room)
 	queue_redraw()
 
@@ -170,7 +159,8 @@ func check_transitions(room: Dictionary) -> void:
 		enter_room(dungeon.current + door_dir, door_dir)
 
 
-# Ruch kółka po siatce: najpierw oś X, potem Y, dzięki temu gracz ślizga się po ścianach.
+# Ruch kółka po siatce: najpierw oś X, potem Y, dzięki temu postać ślizga się po ścianach.
+# Używany przez gracza i wrogów (enemy_ai.gd).
 func move_circle(room: Dictionary, pos: Vector2, motion: Vector2, radius: float, can_use_doors: bool) -> Vector2:
 	var next := Vector2(pos.x + motion.x, pos.y)
 	if not circle_blocked(room, next, radius, can_use_doors):
@@ -269,57 +259,8 @@ func kill_enemy(room: Dictionary, e: Dictionary) -> void:
 			say("Pokój oczyszczony - drzwi otwarte!")
 
 
-# ---------- wrogowie ----------
-
-func update_enemies(room: Dictionary, delta: float) -> void:
-	var speed := Balance.ENEMY_BASE_SPEED + floor_num * Balance.ENEMY_SPEED_PER_FLOOR
-	for e in room["enemies"]:
-		e["flash"] = maxf(0.0, e["flash"] - delta)
-		e["t"] -= delta
-		var to_player: Vector2 = player_pos - e["p"]
-		match e["state"]:
-			"chase":
-				if e["t"] > 0.0:
-					continue
-				if to_player.length() <= Balance.ENEMY_ATTACK_RANGE + Balance.PLAYER_RADIUS:
-					e["state"] = "windup"
-					e["t"] = Balance.ENEMY_WINDUP
-				else:
-					var motion: Vector2 = to_player.normalized() * speed * delta + separation(room, e) * delta
-					e["p"] = move_circle(room, e["p"], motion, Balance.ENEMY_RADIUS, false)
-			"windup":
-				if e["t"] <= 0.0:
-					enemy_strike(e)
-					e["state"] = "recover"
-					e["t"] = Balance.ENEMY_RECOVER
-			"recover":
-				if e["t"] <= 0.0:
-					e["state"] = "chase"
-		if game_over:
-			return
-
-
-# Lekkie odpychanie wrogów od siebie, żeby nie stali w jednym miejscu.
-func separation(room: Dictionary, e: Dictionary) -> Vector2:
-	var push := Vector2.ZERO
-	for other in room["enemies"]:
-		if other == e:
-			continue
-		var d: Vector2 = e["p"] - other["p"]
-		var dist := d.length()
-		if dist > 0.01 and dist < Balance.ENEMY_RADIUS * 2.5:
-			push += d / dist * 60.0
-	return push
-
-
-func enemy_strike(e: Dictionary) -> void:
-	if e["p"].distance_to(player_pos) > Balance.ENEMY_HIT_RANGE + Balance.PLAYER_RADIUS:
-		return
-	if invuln > 0.0:
-		add_float(player_pos + Vector2(0, -20), "unik!", Color(0.6, 0.9, 1.0))
-		return
-	var max_dmg := Balance.ENEMY_BASE_DMG + floori(floor_num / 3.0)
-	var dmg: int = maxi(1, randi_range(1, max_dmg) - inv.defense())
+# Wywoływane przez wrogów (enemy_ai.gd) przy trafieniu gracza.
+func hurt_player(dmg: int) -> void:
 	player_hp -= dmg
 	invuln = Balance.HIT_INVULN
 	hurt_flash = 0.2
@@ -441,7 +382,7 @@ func enter_room(cell: Vector2i, dir: Vector2i) -> void:
 	dungeon.current = cell
 	var room: Dictionary = dungeon.current_room()
 	room["visited"] = true
-	prepare_room(room)
+	enemy_ai.prepare_room(room)
 	player_pos = tile_center(dungeon.entry_position(dir))
 	if room["enemies"].is_empty():
 		say("Pusty pokój.")
@@ -474,189 +415,14 @@ func update_floats(delta: float) -> void:
 		i -= 1
 
 
-# ---------- rysowanie ----------
-
-func cell_rect(pos: Vector2i, margin: float = 0.0) -> Rect2:
-	return Rect2(
-		ORIGIN + Vector2(pos * TILE) + Vector2(margin, margin),
-		Vector2(TILE - margin * 2, TILE - margin * 2))
-
-
-func bar(pos: Vector2, size: Vector2, ratio: float, color: Color) -> void:
-	draw_rect(Rect2(pos, size), Color(0.15, 0.15, 0.18))
-	draw_rect(Rect2(pos, Vector2(size.x * clampf(ratio, 0.0, 1.0), size.y)), color)
-
+# ---------- rysowanie (szczegóły w room_view.gd i hud.gd) ----------
 
 func _draw() -> void:
 	if dungeon.layout.is_empty():
 		return
-	var rw: int = Dungeon.ROOM_W
-	var rh: int = Dungeon.ROOM_H
-	var cx: int = Dungeon.CX
-	var cy: int = Dungeon.CY
-	var room: Dictionary = dungeon.current_room()
-	var cleared: bool = room["enemies"].is_empty()
 	var font := ThemeDB.fallback_font
-
-	# podłoga
-	draw_rect(Rect2(ORIGIN, Vector2(rw * TILE, rh * TILE)), Color(0.1, 0.1, 0.12))
-
-	# ściany i drzwi
-	for x in rw:
-		for y in rh:
-			if x == 0 or y == 0 or x == rw - 1 or y == rh - 1:
-				var pos := Vector2i(x, y)
-				var color := Color(0.35, 0.35, 0.4)
-				var dd: Vector2i = dungeon.door_direction(pos)
-				if dd != Vector2i.ZERO and room["doors"].has(dd):
-					color = Color(0.55, 0.4, 0.2) if cleared else Color(0.7, 0.15, 0.15)
-				draw_rect(cell_rect(pos), color)
-
-	# przeszkody
-	for op in room["obstacles"]:
-		draw_rect(cell_rect(op, 4), Color(0.25, 0.25, 0.3))
-
-	# portal do gildii
-	if dungeon.current == dungeon.start_cell:
-		var pc := ORIGIN + tile_center(Vector2i(cx, cy))
-		draw_circle(pc, 18, Color(0.25, 0.45, 0.9, 0.35))
-		draw_arc(pc, 18, 0, TAU, 32, Color(0.45, 0.7, 1.0), 2.0)
-
-	# schody
-	if dungeon.current == dungeon.stairs_cell:
-		var sc := Color(0.2, 0.7, 0.3) if cleared else Color(0.15, 0.3, 0.18)
-		draw_rect(cell_rect(Vector2i(cx, cy), 3), sc)
-		draw_string(font, cell_rect(Vector2i(cx, cy)).position + Vector2(18, 33), ">", HORIZONTAL_ALIGNMENT_LEFT, -1, 26)
-
-	# przedmioty na podłodze
-	for it in room["items"]:
-		draw_rect(cell_rect(it["pos"], 13), Items.color_of(it["item"]))
-
-	# wrogowie: zapowiedź ataku rośnie aż do ciosu
-	for e in room["enemies"]:
-		var ep: Vector2 = ORIGIN + e["p"]
-		if e["state"] == "windup":
-			var progress: float = 1.0 - e["t"] / Balance.ENEMY_WINDUP
-			var reach := Balance.ENEMY_HIT_RANGE + Balance.PLAYER_RADIUS
-			draw_circle(ep, reach * progress, Color(1, 0.2, 0.1, 0.18))
-			draw_arc(ep, reach, 0, TAU, 32, Color(1, 0.3, 0.2, 0.7), 2.0)
-		var col := Color(0.85, 0.2, 0.2)
-		if e["flash"] > 0.0:
-			col = Color.WHITE
-		elif e["state"] == "windup":
-			col = Color(1.0, 0.5, 0.2)
-		elif e["state"] == "recover":
-			col = Color(0.55, 0.15, 0.15)
-		draw_circle(ep, Balance.ENEMY_RADIUS, col)
-		if e["hp"] < e["max_hp"]:
-			bar(ep + Vector2(-16, -26), Vector2(32, 4), float(e["hp"]) / e["max_hp"], Color(0.9, 0.25, 0.25))
-
-	# gracz
-	var pp := ORIGIN + player_pos
-	if skill_fx > 0.0:
-		draw_circle(pp, Balance.SKILL_RADIUS, Color(0.4, 0.75, 1.0, 0.25))
-		draw_arc(pp, Balance.SKILL_RADIUS, 0, TAU, 48, Color(0.5, 0.85, 1.0), 3.0)
-	if swing_timer > 0.0:
-		var a := facing.angle()
-		draw_arc(pp, Balance.ATTACK_RANGE, a - 1.1, a + 1.1, 16, Color(1, 1, 0.8), 4.0)
-	var player_color := Color(0.9, 0.8, 0.2)
-	if game_over:
-		player_color = Color(0.4, 0.4, 0.4)
-	elif hurt_flash > 0.0:
-		player_color = Color(1, 0.3, 0.3)
-	elif dash_timer > 0.0:
-		player_color = Color(1, 1, 0.7, 0.5)
-	elif invuln > 0.0 and int(invuln * 20) % 2 == 0:
-		player_color = Color(0.9, 0.8, 0.2, 0.5)
-	draw_circle(pp, Balance.PLAYER_RADIUS, player_color)
-	draw_line(pp, pp + facing * (Balance.PLAYER_RADIUS + 6), Color(0.2, 0.15, 0.05), 3.0)
-
-	for f in floats:
-		var c: Color = f["color"]
-		c.a = clampf(f["t"] / 0.4, 0.0, 1.0)
-		draw_string(font, ORIGIN + f["pos"] + Vector2(-12, 0), f["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, c)
-
-	draw_hud(font, rh)
-	draw_minimap(font)
+	RoomView.draw_room(self, self, font)
+	Hud.draw_hud(self, self, font)
+	Hud.draw_minimap(self, self, font)
 	if inv_open:
-		draw_inventory(font)
-
-
-func draw_hud(font: Font, rh: int) -> void:
-	var hud_y := ORIGIN.y + rh * TILE + 20
-	var max_hp := GameState.max_hp()
-	bar(Vector2(ORIGIN.x, hud_y), Vector2(220, 16), float(player_hp) / max_hp, Color(0.8, 0.2, 0.25))
-	draw_string(font, Vector2(ORIGIN.x + 6, hud_y + 13), "HP %d/%d" % [player_hp, max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
-	bar(Vector2(ORIGIN.x, hud_y + 20), Vector2(220, 6), float(GameState.xp) / GameState.xp_to_next(), Color(0.4, 0.75, 1.0))
-
-	draw_string(font, Vector2(ORIGIN.x + 240, hud_y + 14), "Piętro %d   Poz. %d   Złoto z wyprawy: %d zł   Udźwig %d/%d" % [
-		floor_num, GameState.level, run_gold, inv.total_weight(), inv.max_weight], HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
-
-	var dash_ready := dash_cd <= 0.0
-	var skill_ready := skill_cd <= 0.0
-	draw_string(font, Vector2(ORIGIN.x, hud_y + 50), "Unik [Shift]: %s" % ("gotowy" if dash_ready else "%.1fs" % dash_cd),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.6, 0.9, 0.6) if dash_ready else Color(0.6, 0.6, 0.6))
-	draw_string(font, Vector2(ORIGIN.x + 200, hud_y + 50), "%s [K]: %s" % [Balance.SKILL_NAME, "gotowe" if skill_ready else "%.1fs" % skill_cd],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.5, 0.8, 1.0) if skill_ready else Color(0.6, 0.6, 0.6))
-	if on_portal():
-		draw_string(font, Vector2(ORIGIN.x + 460, hud_y + 50), "F: wróć do gildii z łupem",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.45, 0.7, 1.0))
-	elif on_stairs():
-		draw_string(font, Vector2(ORIGIN.x + 460, hud_y + 50), "F: zejdź piętro niżej",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.4, 0.85, 0.5))
-
-	if log_timer > 0.0:
-		draw_string(font, Vector2(ORIGIN.x, hud_y + 76), log_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15)
-
-
-func draw_minimap(font: Font) -> void:
-	draw_string(font, MINI_ORIGIN + Vector2(0, -12), "Mapa piętra", HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
-	for cell in dungeon.layout:
-		var r: Dictionary = dungeon.layout[cell]
-		var seen: bool = r["visited"]
-		if not seen:
-			for dd2 in r["doors"]:
-				var nb: Vector2i = cell + dd2
-				if dungeon.layout.has(nb) and dungeon.layout[nb]["visited"]:
-					seen = true
-		if not seen:
-			continue
-		var col := Color(0.3, 0.3, 0.35) if r["visited"] else Color(0.15, 0.15, 0.18)
-		if cell == dungeon.start_cell:
-			col = Color(0.25, 0.4, 0.75)
-		if cell == dungeon.stairs_cell and r["visited"]:
-			col = Color(0.2, 0.6, 0.3)
-		if cell == dungeon.current:
-			col = Color(0.9, 0.8, 0.2)
-		draw_rect(Rect2(MINI_ORIGIN + Vector2(cell.x * 34, cell.y * 26), Vector2(30, 22)), col)
-
-	draw_string(font, MINI_ORIGIN + Vector2(0, 160), "Czerwone drzwi: pokonaj wrogów", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 182), "Pomarańczowy wróg: zaraz uderzy - uciekaj!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 204), "Zielone pole >: schody w dół (F)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 226), "Niebieski krąg: portal do gildii (F)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-
-	draw_string(font, MINI_ORIGIN + Vector2(0, 272), "Założone (I = plecak)", HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 296), "Broń: %s" % Items.describe(inv.weapon), HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 318), "Zbroja: %s" % Items.describe(inv.armor), HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 340), "W plecaku: %d szt." % inv.pack.size(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(font, MINI_ORIGIN + Vector2(0, 372), "Śmierć = utrata złota z wyprawy i plecaka.", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.8, 0.5, 0.5))
-
-
-func draw_inventory(font: Font) -> void:
-	var panel := Rect2(ORIGIN + Vector2(60, 24), Vector2(600, 384))
-	draw_rect(panel, Color(0, 0, 0, 0.92))
-	draw_rect(panel, Color(0.5, 0.5, 0.55), false, 2.0)
-	var x := panel.position.x + 20
-	var y := panel.position.y + 34
-	draw_string(font, Vector2(x, y), "Plecak (pauza)     Udźwig: %d/%d" % [inv.total_weight(), inv.max_weight], HORIZONTAL_ALIGNMENT_LEFT, -1, 20)
-	var n: int = inv.pack.size()
-	if n == 0:
-		draw_string(font, Vector2(x, y + 40), "Plecak jest pusty.", HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
-	var first: int = clampi(inv_cursor - 4, 0, maxi(n - 9, 0))
-	for row in mini(9, n - first):
-		var i: int = first + row
-		var item: Dictionary = inv.pack[i]
-		var line_y := y + 36 + row * 26
-		var prefix := "> " if i == inv_cursor else "   "
-		draw_string(font, Vector2(x, line_y), prefix + Items.describe(item), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Items.color_of(item))
-	draw_string(font, Vector2(x, panel.end.y - 16), "W/S lub strzałki: wybór   E: użyj/załóż   X: wyrzuć   I: zamknij", HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
+		Hud.draw_inventory(self, self, font)

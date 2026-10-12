@@ -1,23 +1,29 @@
-# Poprawki po Fazie 1
+# Rozbicie main.gd na kilka skryptów
 
-Pliki z tego folderu podmieniasz w projekcie (`main.gd`, `dungeon.gd`, `game_state.gd`, `guild.gd`, `balance.gd`).
-Ten plik możesz wrzucić do `docs/`. `PLAN.md` zostaje bez zmian.
+Zachowanie gry ma zostać **identyczne**. Zmienia się tylko podział kodu.
+Zakładam, że masz już wdrożone pliki z folderu `poprawki-faza1` (schody na F, nocleg itd.).
 
-## Co zmieniono
-1. **Plecak (I)**: `main.gd` odświeża ekran od razu po otwarciu. Wcześniej panel mógł się nie pokazać do następnego klawisza.
-2. **Schody**: nie zjeżdżają już same. Stań na środku pokoju ze schodami po oczyszczeniu i naciśnij **F** (ten sam klawisz co portal).
-3. **Zamknięcie gry w lochu**: liczy się jak śmierć (utrata plecaka). Zapis ma flagę `in_run`. Stała `QUIT_IN_RUN_IS_DEATH` w `balance.gd` wyłącza to na czas testów w edytorze.
-4. **Odpoczynek**: nocleg w gildii kosztuje `REST_COST` (10 zł) i nie działa przy pełnym HP. Powrót z lochu portalem leczy za darmo, jak wcześniej. Dzięki temu Lecznica ma sens.
-5. **Porządki**: usunięte nieużywane pole `aim` wrogów, nieużywane `hp` wrogów w `dungeon.gd` i martwe doliczanie HP w `GameState.add_xp`.
+## Co gdzie leży
+| Plik | Odpowiada za |
+|---|---|
+| `main.gd` (podmień) | pętla gry, sterowanie, walka gracza, pokoje i piętra, plecak (logika) |
+| `enemy_ai.gd` (nowy) | wrogowie: przygotowanie, pościg, zamach, cios |
+| `room_view.gd` (nowy) | rysowanie pokoju: ściany, przedmioty, wrogowie, gracz, wymiary kratki |
+| `hud.gd` (nowy) | paski, mapa piętra, panel plecaka |
 
-## Nie zmieniono (do sprawdzenia w grze)
-- Balans zbroi: przy obronie 2 lub więcej wrogowie na początkowych piętrach zadają zawsze 1 obrażeń.
-- Wrogowie rosną w obrażenia o 1 na 3 piętra, a zbroja daje do 3 obrony.
+Nowa metoda `hurt_player(dmg)` w `main.gd`: wrogowie wywołują ją przy trafieniu zamiast zmieniać stan gracza bezpośrednio.
 
-## Lista kontrolna testu (około 15 minut)
-- [ ] I otwiera plecak od razu. E zakłada lub używa, X wyrzuca, I zamyka.
-- [ ] Przejście przez środek pokoju ze schodami nic nie robi. F na schodach schodzi piętro niżej.
-- [ ] F na niebieskim kręgu wraca do gildii. Złoto z wyprawy trafia do skarbca.
-- [ ] Zamknij grę w lochu i uruchom ponownie: plecak pusty, komunikat o urwanej wyprawie.
-- [ ] Nocleg: pełne HP = komunikat, brak złota = komunikat, inaczej -10 zł i leczenie.
-- [ ] Czy pierwsze piętro jest za łatwe albo za trudne? Daj znać, zmienię liczby w `balance.gd`.
+## Wdrożenie
+1. Wrzuć `enemy_ai.gd`, `room_view.gd` i `hud.gd` do folderu projektu (obok `main.gd`).
+2. Podmień `main.gd`.
+3. Otwórz projekt w Godot. Jeśli w panelu Output pojawi się błąd parsowania, wklej mi go.
+
+## Lista kontrolna
+- [ ] Gra startuje, pokój i HUD wyglądają jak wcześniej.
+- [ ] Wróg dostaje obrażenia i ginie, spadają złoto i mikstury.
+- [ ] Wróg się zamachuje (pomarańczowy), trafia (-HP) lub pudłuje przy uniku.
+- [ ] Plecak (I), mapa piętra i napis po prawej działają.
+- [ ] Śmierć wraca do gildii, F na portalu też.
+
+## Po co to
+W Fazie 2 sojusznicy AI dostaną własny skrypt w tym samym stylu co `enemy_ai.gd` i będą używać wspólnego `move_circle` i walki, bez dopisywania kolejnych setek linii do `main.gd`.
